@@ -6,7 +6,7 @@ getgenv().features = {
     Aimbot = true,
     InfiniteJump = true,
     NoClip = true,
-    AutoFarm = true,
+    AutoFarm = false,
     BunnyHop = true
 }
 
@@ -127,4 +127,4 @@ enableInfiniteJump()
 enableNoClip()
 enableAutoFarm()
 enableBunnyHop()
-enableCFrameWalk()
+--enableCFrameWalk()
