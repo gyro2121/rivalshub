@@ -32,7 +32,7 @@ getgenv().BhopEnabled = false
 getgenv().CFrameWalkSpeed = 0.1
 getgenv().Smoothness = 0.6
 getgenv().AutoFarmEnabled = false
-getgenv().AimbotYOffset = 0 -- Default Y-axis offset for aiming
+getgenv().AimbotYOffset = 1.3 -- Default Y-axis offset for aiming
 getgenv().AimbotKeybind = Enum.KeyCode.F -- Default keybind for toggling aimbot
 
 -- Services
