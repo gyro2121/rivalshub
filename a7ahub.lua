@@ -34,6 +34,8 @@ getgenv().Smoothness = 0.6
 getgenv().AutoFarmEnabled = false
 getgenv().AimbotYOffset = 1.3 -- Default Y-axis offset for aiming
 getgenv().AimbotKeybind = Enum.KeyCode.F -- Default keybind for toggling aimbot
+getgenv().MaxESPDistance = 500 -- Initial range for ESP
+getgenv().MaxAimbotDistance = 500 -- Initial range for Aimbot
 
 -- Services
 local players = game:GetService("Players")
@@ -42,11 +44,14 @@ local mouse = localPlayer:GetMouse()
 local runService = game:GetService("RunService")
 local camera = workspace.CurrentCamera
 
--- Function to highlight enemy characters
+-- Track active highlights and targets
+local activeHighlights = {}
+local activeTargets = {}
+
 -- Function to highlight enemy characters within a specified range
 local function highlightEnemy(player)
     if player.Character and not player.Character:FindFirstChild("Totally_NOT_Esp") then
-        local maxHighlightDistance = 1000 -- Adjust this range as needed
+        local maxHighlightDistance = getgenv().MaxESPDistance
 
         -- Calculate distance from local player's character to enemy
         local distance = (localPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
@@ -62,15 +67,29 @@ local function highlightEnemy(player)
             highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
             highlight.OutlineTransparency = 0.5
             highlight.Parent = player.Character
+            activeHighlights[player.UserId] = highlight
         end
     end
 end
 
+-- Function to remove highlight from player
+local function removeHighlight(player)
+    local highlight = activeHighlights[player.UserId]
+    if highlight then
+        highlight:Destroy()
+        activeHighlights[player.UserId] = nil
+    end
+end
+
 -- Function to enable ESP for all players
-local function enableESP()
+local function updateESP()
     for _, player in pairs(players:GetPlayers()) do
         if player ~= localPlayer then
-            highlightEnemy(player)
+            if getgenv().ESPEnabled then
+                highlightEnemy(player)
+            else
+                removeHighlight(player)
+            end
         end
     end
 end
@@ -87,19 +106,13 @@ end)
 -- Update ESP every frame
 runService.RenderStepped:Connect(function()
     if getgenv().ESPEnabled then
-        enableESP()
-    else
-        for _, player in pairs(players:GetPlayers()) do
-            if player.Character and player.Character:FindFirstChild("Totally_NOT_Esp") then
-                player.Character.Totally_NOT_Esp:Destroy()
-            end
-        end
+        updateESP()
     end
 end)
 
 -- Function to find the nearest enemy within a specified range
 local function findClosestEnemy()
-    local maxAimbotDistance = 1000 -- Adjust this range as needed
+    local maxAimbotDistance = getgenv().MaxAimbotDistance
     local closestDistance = math.huge
     local target = nil
     
@@ -118,14 +131,11 @@ local function findClosestEnemy()
     
     return target
 end
-    
-    return target
-end
 
 -- Function to move mouse to the enemy's head with adjustable Y-axis offset
-local aimingConnection = nil
 local function aimAtEnemy()
     local target = findClosestEnemy()
+    
     if target and target.Character and target.Character:FindFirstChild("Head") and target.Character:FindFirstChild("Humanoid") and target.Character.Humanoid.Health > 0 then
         -- Calculate screen position of the enemy's head
         local headPosition = target.Character.Head.Position
@@ -153,9 +163,30 @@ local function aimAtEnemy()
         mousemoverel(moveX, moveY)
     else
         -- If target is dead or not found, disconnect aiming and look for a new target
-        if aimingConnection then
-            aimingConnection:Disconnect()
-            aimingConnection = runService.RenderStepped:Connect(aimAtEnemy)
+        if activeTargets[localPlayer.UserId] then
+            activeTargets[localPlayer.UserId] = nil
+        end
+    end
+end
+
+-- Monitor distance and disable aimbot or highlight if out of range
+local function monitorTargets()
+    for userId, _ in pairs(activeTargets) do
+        local target = players:GetPlayerByUserId(userId)
+        
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (localPlayer.Character.HumanoidRootPart.Position - target.Character.HumanoidRootPart.Position).Magnitude
+            
+            if distance > getgenv().MaxAimbotDistance then
+                -- Disable aimbot and remove highlight
+                activeTargets[userId] = nil
+                removeHighlight(target)
+                
+                if aimingConnection then
+                    aimingConnection:Disconnect()
+                    aimingConnection = nil
+                end
+            end
         end
     end
 end
@@ -182,7 +213,12 @@ end)
 -- Enable auto-aim when mouse button is held down
 mouse.Button1Down:Connect(function()
     if getgenv().AimbotEnabled then
-        aimingConnection = runService.RenderStepped:Connect(aimAtEnemy)
+        local target = findClosestEnemy()
+        
+        if target then
+            activeTargets[localPlayer.UserId] = target.UserId
+            aimingConnection = runService.RenderStepped:Connect(aimAtEnemy)
+        end
     end
 end)
 
@@ -190,10 +226,16 @@ end)
 mouse.Button1Up:Connect(function()
     if aimingConnection then
         aimingConnection:Disconnect()
+        aimingConnection = nil
     end
 end)
 
--- Add toggles to the UI
+-- Monitor distance every second
+runService.Heartbeat:Connect(function()
+    monitorTargets()
+end)
+
+-- Add toggles and settings to the UI
 
 -- Aimbot Tab
 aimbotTab:AddToggle({
@@ -210,22 +252,31 @@ aimbotTab:AddToggle({
     end
 })
 
--- Add slider for Y-axis offset
 aimbotTab:AddSlider({
-    Name = "Y-Axis Offset",
+    Name = "Aimbot Y Offset",
     Min = -10,
     Max = 10,
-    Default = 0,
+    Default = 1.3,
     Increment = 0.1,
     Callback = function(value)
         getgenv().AimbotYOffset = value
     end
 })
 
--- Add keybind setting for aimbot
+aimbotTab:AddSlider({
+    Name = "Smoothness",
+    Min = 0.1,
+    Max = 1,
+    Default = 0.6,
+    Increment = 0.1,
+    Callback = function(value)
+        getgenv().Smoothness = value
+    end
+})
+
 aimbotTab:AddDropdown({
     Name = "Aimbot Keybind",
-    Default = getgenv().AimbotKeybind,
+    Default = getgenv().AimbotKeybind.Name,
     Options = {"F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "T", "U", "V", "W", "X", "Y", "Z"},
     Callback = function(selectedKey)
         getgenv().AimbotKeybind = Enum.KeyCode[selectedKey]
@@ -238,10 +289,23 @@ espTab:AddToggle({
     Default = false,
     Callback = function(value)
         getgenv().ESPEnabled = value
+        updateESP()
     end
 })
 
--- Infinite Jump Toggle
+espTab:AddSlider({
+    Name = "ESP Max Distance",
+    Min = 100,
+    Max = 1000,
+    Default = 500,
+    Increment = 50,
+    Callback = function(value)
+        getgenv().MaxESPDistance = value
+        updateESP() -- Reapply ESP when distance changes
+    end
+})
+
+-- Movement Tab
 Window:MakeTab({
     Name = "Movement",
     Icon = "rbxassetid://4483345998", -- Replace with your icon ID
@@ -264,7 +328,6 @@ Window:MakeTab({
     end
 })
 
--- No Clip Toggle
 Window:MakeTab({
     Name = "Movement",
     Icon = "rbxassetid://4483345998", -- Replace with your icon ID
@@ -288,7 +351,6 @@ Window:MakeTab({
     end
 })
 
--- Bunny Hop Toggle
 Window:MakeTab({
     Name = "Movement",
     Icon = "rbxassetid://4483345998", -- Replace with your icon ID
@@ -308,7 +370,6 @@ Window:MakeTab({
     end
 })
 
--- Walk Speed Slider
 Window:MakeTab({
     Name = "Movement",
     Icon = "rbxassetid://4483345998", -- Replace with your icon ID
@@ -328,7 +389,6 @@ Window:MakeTab({
 })
 
 -- Keybind to reopen the menu
-local UserInputService = game:GetService("UserInputService")
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.RightShift then
         Window:Toggle()
@@ -341,3 +401,6 @@ OrionLib:MakeNotification({
     Content = "GUI loaded successfully!",
     Time = 5
 })
+
+-- Initialize Orion Library
+OrionLib:Init()
