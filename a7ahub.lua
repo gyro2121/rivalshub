@@ -356,7 +356,7 @@ aimbotTab:AddSlider({
 aimbotTab:AddDropdown({
     Name = "Aimbot Keybind",
     Default = getgenv().AimbotKeybind,
-    Options = {"F", "G", "H", "J", "K"},
+    Options = {"Q", "F", "G", "H", "J", "K"},
     Callback = function(option)
         getgenv().AimbotKeybind = Enum.KeyCode[option]
     end
