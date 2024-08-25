@@ -3,10 +3,10 @@ local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/shle
 
 -- Create the main window
 local Window = OrionLib:MakeWindow({
-    Name = "My GUI",
+    Name = "A7A hub",
     HidePremium = false,
     SaveConfig = true,
-    IntroText = "Welcome to My GUI"
+    IntroText = "Welcome to A7A hub"
 })
 
 -- Create tabs
