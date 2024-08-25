@@ -3,10 +3,10 @@ local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/shle
 
 -- Create the main window
 local Window = OrionLib:MakeWindow({
-    Name = "A7A hub",
+    Name = "A7A Hub",
     HidePremium = false,
     SaveConfig = true,
-    IntroText = "Welcome to A7A hub"
+    IntroText = "Welcome to A7A Hub"
 })
 
 -- Create tabs
@@ -22,12 +22,17 @@ local espTab = Window:MakeTab({
     PremiumOnly = false
 })
 
+local movementTab = Window:MakeTab({
+    Name = "Movement",
+    Icon = "rbxassetid://4483345998", -- Replace with your icon ID
+    PremiumOnly = false
+})
+
 -- Global settings for toggles
 getgenv().AimbotEnabled = false
 getgenv().ESPEnabled = false
 getgenv().InfiniteJumpEnabled = false
 getgenv().NoClipEnabled = false
-getgenv().CFrameWalkEnabled = false
 getgenv().BhopEnabled = false
 getgenv().CFrameWalkSpeed = 0.1
 getgenv().Smoothness = 0.6
@@ -36,6 +41,7 @@ getgenv().AimbotYOffset = 1.3 -- Default Y-axis offset for aiming
 getgenv().AimbotKeybind = Enum.KeyCode.F -- Default keybind for toggling aimbot
 getgenv().MaxESPDistance = 500 -- Initial range for ESP
 getgenv().MaxAimbotDistance = 500 -- Initial range for Aimbot
+getgenv().FOVRadius = 100 -- Default FOV radius for aimbot
 
 -- Services
 local players = game:GetService("Players")
@@ -47,6 +53,22 @@ local camera = workspace.CurrentCamera
 -- Track active highlights and targets
 local activeHighlights = {}
 local activeTargets = {}
+
+-- FOV Circle Drawing
+local fovCircle = Drawing.new("Circle")
+fovCircle.Thickness = 1
+fovCircle.Color = Color3.fromRGB(255, 0, 0)
+fovCircle.NumSides = 64
+fovCircle.Radius = getgenv().FOVRadius
+fovCircle.Visible = true
+fovCircle.Filled = false
+fovCircle.Transparency = 1
+
+-- Function to update FOV Circle position
+local function updateFOVCircle()
+    local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    fovCircle.Position = screenCenter
+end
 
 -- Function to highlight enemy characters within a specified range
 local function highlightEnemy(player)
@@ -108,6 +130,7 @@ runService.RenderStepped:Connect(function()
     if getgenv().ESPEnabled then
         updateESP()
     end
+    updateFOVCircle() -- Update FOV circle position every frame
 end)
 
 -- Function to find the nearest enemy within a specified range
@@ -142,25 +165,31 @@ local function aimAtEnemy()
         local offsetPosition = headPosition + Vector3.new(0, getgenv().AimbotYOffset, 0)
         local targetPosition = camera:WorldToViewportPoint(offsetPosition)
         
-        -- Calculate smooth movement
-        local smoothFactor = getgenv().Smoothness
-        local mouseX = mouse.X
-        local mouseY = mouse.Y
+        -- Check if the enemy is within the FOV circle
+        local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+        local distanceToFOV = (Vector2.new(targetPosition.X, targetPosition.Y) - screenCenter).Magnitude
         
-        -- Calculate movement difference
-        local deltaX = targetPosition.X - mouseX
-        local deltaY = targetPosition.Y - mouseY
-        
-        -- Apply smoothing
-        local moveX = deltaX / smoothFactor
-        local moveY = deltaY / smoothFactor
-        
-        -- Limit mouse movement to avoid excessive displacement
-        moveX = math.clamp(moveX, -50, 50)
-        moveY = math.clamp(moveY, -50, 50)
-        
-        -- Move mouse
-        mousemoverel(moveX, moveY)
+        if distanceToFOV <= getgenv().FOVRadius then
+            -- Calculate smooth movement
+            local smoothFactor = getgenv().Smoothness
+            local mouseX = mouse.X
+            local mouseY = mouse.Y
+            
+            -- Calculate movement difference
+            local deltaX = targetPosition.X - mouseX
+            local deltaY = targetPosition.Y - mouseY
+            
+            -- Apply smoothing
+            local moveX = deltaX / smoothFactor
+            local moveY = deltaY / smoothFactor
+            
+            -- Limit mouse movement to avoid excessive displacement
+            moveX = math.clamp(moveX, -50, 50)
+            moveY = math.clamp(moveY, -50, 50)
+            
+            -- Move mouse
+            mousemoverel(moveX, moveY)
+        end
     else
         -- If target is dead or not found, disconnect aiming and look for a new target
         if activeTargets[localPlayer.UserId] then
@@ -211,52 +240,101 @@ UserInputService.InputBegan:Connect(function(input)
 end)
 
 -- Enable auto-aim when mouse button is held down
-mouse.Button1Down:Connect(function()
-    if getgenv().AimbotEnabled then
-        local target = findClosestEnemy()
-        
-        if target then
-            activeTargets[localPlayer.UserId] = target.UserId
+local aimingConnection
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and not gameProcessed then
+        if getgenv().AimbotEnabled then
             aimingConnection = runService.RenderStepped:Connect(aimAtEnemy)
         end
     end
 end)
 
--- Disable auto-aim when mouse button is released
-mouse.Button1Up:Connect(function()
-    if aimingConnection then
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and aimingConnection then
         aimingConnection:Disconnect()
         aimingConnection = nil
     end
 end)
 
--- Monitor distance every second
-runService.Heartbeat:Connect(function()
-    monitorTargets()
-end)
-
--- Add toggles and settings to the UI
-
--- Aimbot Tab
-aimbotTab:AddToggle({
-    Name = "Enable Aimbot",
+-- Movement Tab UI
+movementTab:AddToggle({
+    Name = "Infinite Jump",
     Default = false,
+    Callback = function(state)
+        getgenv().InfiniteJumpEnabled = state
+        localPlayer.Character:WaitForChild("Humanoid").JumpPower = state and math.huge or 50
+    end
+})
+
+movementTab:AddToggle({
+    Name = "No Clip",
+    Default = false,
+    Callback = function(state)
+        getgenv().NoClipEnabled = state
+        localPlayer.Character.Humanoid:ChangeState(state and Enum.HumanoidStateType.Physics or Enum.HumanoidStateType.GettingUp)
+    end
+})
+
+movementTab:AddToggle({
+    Name = "Bhop",
+    Default = false,
+    Callback = function(state)
+        getgenv().BhopEnabled = state
+        if state then
+            localPlayer.Character:WaitForChild("Humanoid").JumpPower = 50
+        end
+    end
+})
+
+-- ESP Tab UI
+espTab:AddToggle({
+    Name = "ESP",
+    Default = false,
+    Callback = function(state)
+        getgenv().ESPEnabled = state
+    end
+})
+
+espTab:AddSlider({
+    Name = "ESP Distance",
+    Min = 100,
+    Max = 1000,
+    Default = getgenv().MaxESPDistance,
+    Increment = 50,
     Callback = function(value)
-        getgenv().AimbotEnabled = value
-        local status = value and "enabled" or "disabled"
-        OrionLib:MakeNotification({
-            Name = "Aimbot",
-            Content = "Aimbot " .. status,
-            Time = 3
-        })
+        getgenv().MaxESPDistance = value
+    end
+})
+
+-- Aimbot Tab UI
+aimbotTab:AddToggle({
+    Name = "Aimbot",
+    Default = false,
+    Callback = function(state)
+        getgenv().AimbotEnabled = state
+        if not state and aimingConnection then
+            aimingConnection:Disconnect()
+            aimingConnection = nil
+        end
     end
 })
 
 aimbotTab:AddSlider({
-    Name = "Aimbot Y Offset",
-    Min = -10,
+    Name = "Aimbot Smoothness",
+    Min = 0.1,
+    Max = 2,
+    Default = getgenv().Smoothness,
+    Increment = 0.1,
+    Callback = function(value)
+        getgenv().Smoothness = value
+    end
+})
+
+aimbotTab:AddSlider({
+    Name = "Aimbot Y-Axis Offset",
+    Min = 0,
     Max = 10,
-    Default = 1.3,
+    Default = getgenv().AimbotYOffset,
     Increment = 0.1,
     Callback = function(value)
         getgenv().AimbotYOffset = value
@@ -264,143 +342,22 @@ aimbotTab:AddSlider({
 })
 
 aimbotTab:AddSlider({
-    Name = "Smoothness",
-    Min = 0.1,
-    Max = 1,
-    Default = 0.6,
-    Increment = 0.1,
+    Name = "FOV Radius",
+    Min = 50,
+    Max = 500,
+    Default = getgenv().FOVRadius,
+    Increment = 10,
     Callback = function(value)
-        getgenv().Smoothness = value
+        getgenv().FOVRadius = value
+        fovCircle.Radius = value
     end
 })
 
 aimbotTab:AddDropdown({
     Name = "Aimbot Keybind",
-    Default = getgenv().AimbotKeybind.Name,
-    Options = {"F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "T", "U", "V", "W", "X", "Y", "Z"},
-    Callback = function(selectedKey)
-        getgenv().AimbotKeybind = Enum.KeyCode[selectedKey]
+    Default = getgenv().AimbotKeybind,
+    Options = {"F", "G", "H", "J", "K"},
+    Callback = function(option)
+        getgenv().AimbotKeybind = Enum.KeyCode[option]
     end
 })
-
--- ESP Tab
-espTab:AddToggle({
-    Name = "Enable ESP",
-    Default = false,
-    Callback = function(value)
-        getgenv().ESPEnabled = value
-        updateESP()
-    end
-})
-
-espTab:AddSlider({
-    Name = "ESP Max Distance",
-    Min = 100,
-    Max = 1000,
-    Default = 500,
-    Increment = 50,
-    Callback = function(value)
-        getgenv().MaxESPDistance = value
-        updateESP() -- Reapply ESP when distance changes
-    end
-})
-
--- Movement Tab
-Window:MakeTab({
-    Name = "Movement",
-    Icon = "rbxassetid://4483345998", -- Replace with your icon ID
-    PremiumOnly = false
-}):AddToggle({
-    Name = "Infinite Jump",
-    Default = false,
-    Callback = function(value)
-        getgenv().InfiniteJumpEnabled = value
-        if value then
-            local function infiniteJump()
-                while getgenv().InfiniteJumpEnabled do
-                    localPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-                    localPlayer.Character.Humanoid.Jump = true
-                    wait(0.1)
-                end
-            end
-            infiniteJump()
-        end
-    end
-})
-
-Window:MakeTab({
-    Name = "Movement",
-    Icon = "rbxassetid://4483345998", -- Replace with your icon ID
-    PremiumOnly = false
-}):AddToggle({
-    Name = "No Clip",
-    Default = false,
-    Callback = function(value)
-        getgenv().NoClipEnabled = value
-        local function noClip()
-            local character = localPlayer.Character
-            if character then
-                for _, part in pairs(character:GetChildren()) do
-                    if part:IsA("BasePart") then
-                        part.CanCollide = not getgenv().NoClipEnabled
-                    end
-                end
-            end
-        end
-        noClip()
-    end
-})
-
-Window:MakeTab({
-    Name = "Movement",
-    Icon = "rbxassetid://4483345998", -- Replace with your icon ID
-    PremiumOnly = false
-}):AddToggle({
-    Name = "Bunny Hop",
-    Default = false,
-    Callback = function(value)
-        getgenv().BhopEnabled = value
-        local userInputService = game:GetService("UserInputService")
-        userInputService.InputBegan:Connect(function(input)
-            if getgenv().BhopEnabled and input.KeyCode == Enum.KeyCode.Space then
-                localPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-                localPlayer.Character.Humanoid.Jump = true
-            end
-        end)
-    end
-})
-
-Window:MakeTab({
-    Name = "Movement",
-    Icon = "rbxassetid://4483345998", -- Replace with your icon ID
-    PremiumOnly = false
-}):AddSlider({
-    Name = "Walk Speed",
-    Min = 0,
-    Max = 100,
-    Default = 16,
-    Increment = 1,
-    Callback = function(value)
-        getgenv().WalkSpeed = value
-        if localPlayer.Character and localPlayer.Character:FindFirstChild("Humanoid") then
-            localPlayer.Character.Humanoid.WalkSpeed = value
-        end
-    end
-})
-
--- Keybind to reopen the menu
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        Window:Toggle()
-    end
-end)
-
--- Notification on GUI load
-OrionLib:MakeNotification({
-    Name = "My GUI",
-    Content = "GUI loaded successfully!",
-    Time = 5
-})
-
--- Initialize Orion Library
-OrionLib:Init()
