@@ -43,17 +43,26 @@ local runService = game:GetService("RunService")
 local camera = workspace.CurrentCamera
 
 -- Function to highlight enemy characters
+-- Function to highlight enemy characters within a specified range
 local function highlightEnemy(player)
     if player.Character and not player.Character:FindFirstChild("Totally_NOT_Esp") then
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "Totally_NOT_Esp"
-        highlight.Adornee = player.Character
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        highlight.FillColor = Color3.fromRGB(255, 0, 0)
-        highlight.FillTransparency = 0.5
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-        highlight.OutlineTransparency = 0.5
-        highlight.Parent = player.Character
+        local maxHighlightDistance = 1000 -- Adjust this range as needed
+
+        -- Calculate distance from local player's character to enemy
+        local distance = (localPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+        
+        -- Check if enemy is within range
+        if distance <= maxHighlightDistance then
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "Totally_NOT_Esp"
+            highlight.Adornee = player.Character
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            highlight.FillColor = Color3.fromRGB(255, 0, 0)
+            highlight.FillTransparency = 0.5
+            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            highlight.OutlineTransparency = 0.5
+            highlight.Parent = player.Character
+        end
     end
 end
 
@@ -88,20 +97,27 @@ runService.RenderStepped:Connect(function()
     end
 end)
 
--- Function to find the nearest enemy to aim at
+-- Function to find the nearest enemy within a specified range
 local function findClosestEnemy()
+    local maxAimbotDistance = 1000 -- Adjust this range as needed
     local closestDistance = math.huge
     local target = nil
     
     for _, player in pairs(players:GetPlayers()) do
         if player ~= localPlayer and player.Character and player.Character:FindFirstChild("Head") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            local distance = (localPlayer.Character.Head.Position - player.Character.Head.Position).Magnitude
-            if distance < closestDistance then
+            -- Calculate distance from local player's character to enemy
+            local distance = (localPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+            
+            -- Check if enemy is within range
+            if distance <= maxAimbotDistance and distance < closestDistance then
                 closestDistance = distance
                 target = player
             end
         end
     end
+    
+    return target
+end
     
     return target
 end
